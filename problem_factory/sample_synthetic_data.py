@@ -51,7 +51,8 @@ def sample_fromClass(t0, t1, curve, N, sigma, tubetype = 'l2'):
     normalspaces : np.array of floats, size D x D-1 x N
         Normal spaces of the curve at p_curvedomain.
     """
-    p_curvedomain = np.random.uniform(low = t0, high = t1, size = (N))
+    # p_curvedomain = np.random.uniform(low = t0, high = t1, size = (N))
+    p_curvedomain = np.linspace(t0, t1, N)
     p_curvedomain = np.sort(p_curvedomain)
     D = curve.get_n_features()
     # Containers
