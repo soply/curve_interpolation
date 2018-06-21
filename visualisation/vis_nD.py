@@ -8,28 +8,34 @@ from mpl_toolkits.mplot3d import Axes3D
 function or learned normal spaces and centers. """
 
 def handle_2D_plot():
+    """ Get a figure and handle for a 2D plot. """
     fig = plt.figure()
     ax = fig.gca()
     return fig, ax
 
 
 def handle_3D_plot():
+    """ Get a figure and handle for a 3D plot. """
     fig = plt.figure()
     ax = fig.gca(projection='3d')
     return fig, ax
 
 
-def add_function(point_cloud, fval, ax, cb = True, dim = 2):
+def add_colored_points(point_cloud, cval, ax, cb = True, dim = 2):
+    """ Add points to 2D/3D plot with coloring indicating by the cval value. """
     if dim == 2:
         sc = ax.scatter(point_cloud[0, :], point_cloud[1, :],
-                        c=fval, s = 50.0)
+                        c=cval, s = 50.0)
     elif dim == 3:
         sc = ax.scatter(point_cloud[0, :], point_cloud[1, :], point_cloud[2, :],
-                        c=fval, s = 50.0)
+                        c=cval, s = 50.0)
     if cb == True:
         plt.colorbar(sc)
 
 def add_scattered_pointcloud(point_cloud, labels, ax, label = None, dim = 2):
+    """ Add points to 2D/3D plot where subgroups have been formed, and membership
+    is specified in labels. Each group is plotted in disinguishable from the
+    others by the color. """
     if dim == 2:
         if len(set(labels)) == 1:
             sc = ax.scatter(point_cloud[0, :], point_cloud[1, :], c=labels[:],
@@ -75,6 +81,7 @@ def add_scattered_pointcloud(point_cloud, labels, ax, label = None, dim = 2):
                             c=labels[idx], s = 50.0, cmap = cmap, norm = norm)
 
 def add_scattered_pointcloud_simple(point_cloud, ax, color = 'b', dim = 2):
+    """ Add points to 2D/3D plot with the same color. """
     if dim == 2:
         sc = ax.scatter(point_cloud[0, :], point_cloud[1, :],
                         c=color, s = 50.0)
@@ -83,6 +90,8 @@ def add_scattered_pointcloud_simple(point_cloud, ax, color = 'b', dim = 2):
                         c=color, s = 50.0)
 
 def add_affine_space(center, vector, length, ax, color = 'g', dim = 2):
+    """ Add affine spaces (lines/planes) to points in a 2D/3D plot. Affine spaces
+    are defined by the center and 1 vector (if line) or 2 vectors (if plane). """
     if dim == 2:
         ax.plot((center[0] -length * vector[0], center[0] + length * vector[0]),
                  (center[1] -length * vector[1], center[1] + length * vector[1]),

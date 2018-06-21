@@ -9,6 +9,7 @@ import numpy as np
 
 from partitioning.based_on_domain import (create_partitioning_dt,
                                           create_partitioning_n)
+from performance.error_measurement import l2_error
 from geometry_tools.utils import means_per_label
 from problem_factory.curve_classes import Circle_Piece_2D
 from problem_factory.sample_synthetic_data import sample_fromClass
@@ -49,3 +50,6 @@ if __name__ == "__main__":
     add_scattered_pointcloud(X, labels, ax3, labels, dim = 2)
     add_scattered_pointcloud_simple(means, ax3, color = 'm', dim = 2)
     plt.show()
+    """ Step 3: Make something work :) """
+    X_curve_approx = X_curve ## Fancy stuff needed
+    print l2_error(X_curve_approx, X_curve)
