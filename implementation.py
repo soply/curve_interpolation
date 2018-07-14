@@ -28,17 +28,21 @@ from visualisation.vis_nD import *
 
 
 def test(original_curve, t0 , t1, N,numberOfLevels):
-	dom,curve,coeff,x,tan,norm = sample_fromClass(t0, t1, original_curve,N,0.2)
 
-	res = reconstructCurve(t0, t1, x, tan, dom, N,numberOfLevels)
+	dom,curve,coeff,x,tan,norm = sample_fromClass(t0, t1, original_curve,N,0.2)
+	ymin,means,z = reconstructCurve(t0, t1, x, tan, dom, N,numberOfLevels)
 
 	t = np.linspace(0,2,10)
-	for i in range(numberOfLevels):
-		print(res[i](t))
-		plt.plot(res[i](t)[0],res[i](t)[1])
-	
+
 	fig, ax = handle_2D_plot()
+
+	print('ymin =', ymin)
+	print('means =', means)
+
 	add_scattered_pointcloud_simple(curve,ax,color = 'g',dim=2)
+	add_scattered_pointcloud_simple(ymin,ax,color = 'r', dim = 2)
+	add_scattered_pointcloud_simple(means,ax,color = 'b', dim = 2)
+
 	plt.show()
 	
 	
@@ -74,8 +78,16 @@ def reconstructCurve(t0, t1, points, diffpoints, dom, N,numberOfLevels, lam=1):
 	Returns
 	==================
 	
-	res: list of linear functions that are orthogonal to the curve.
+	y: np.array of floats, size 2 x M
+		The minimalization of the distance function.
 	
+	means: np.array of floats, size 2 x M
+		The mean points of each level set.
+
+	z: np.array of floats, size M x 2 
+		a vector that spans the set of solutions for the minimalization
+		problem. All solutions are on the form y + t*z, where t is a real
+		number. 
 
 	"""
 
@@ -91,7 +103,7 @@ def reconstructCurve(t0, t1, points, diffpoints, dom, N,numberOfLevels, lam=1):
 
 	b = np.linspace(b0,b1,numberOfLevels + 1)
 	L = np.zeros((numberOfLevels,points[0].size,2))
-	means = np.zeros((numberOfLevels,2))
+	means = np.zeros((2,numberOfLevels))
 
 	for i in range(numberOfLevels):
 		count = 0
@@ -107,8 +119,8 @@ def reconstructCurve(t0, t1, points, diffpoints, dom, N,numberOfLevels, lam=1):
 		
 		
 		if count != 0:
-			means[i][0] = float(x_mean)/count 
-			means[i][1] = float(y_mean)/count
+			means[0][i] = float(x_mean)/count 
+			means[1][i] = float(y_mean)/count
 
 	
 	"""
@@ -132,8 +144,8 @@ def reconstructCurve(t0, t1, points, diffpoints, dom, N,numberOfLevels, lam=1):
 
 
 		for i in range(t):
-			shiftedPoints[i][0] = L[j][i][0] - means[j][0]
-			shiftedPoints[i][1] = L[j][i][1] - means[j][1]
+			shiftedPoints[i][0] = L[j][i][0] - means[0][j]
+			shiftedPoints[i][1] = L[j][i][1] - means[1][j]
 		
 			P[i][0] = shiftedPoints[i][0]
 			P[i][1] = shiftedPoints[i][1]
@@ -141,8 +153,8 @@ def reconstructCurve(t0, t1, points, diffpoints, dom, N,numberOfLevels, lam=1):
 		u,s,v = npl.svd(P) 
 		n = v[0]
 		
-		z = lambda t: means[j] + np.array([t*n[0],t*n[1]]).T
-
+		z = [[means[0][j],means[1][j]],n]	
+		
 		N_list.append(n)
 		Z_list.append(z)
 		matrix_list.append(P)
@@ -156,15 +168,14 @@ def reconstructCurve(t0, t1, points, diffpoints, dom, N,numberOfLevels, lam=1):
 	
 	def e(y):
 		s = 0
-		s += abs(y[0]-means[0][0]) + abs(y[1] -means[0][1])-((y[0]-means[0][0])*N_list[0][0] +(y[1]-means[0][1])*N_list[0][1])**2 + ((y[2]-y[0])*N_list[0][0] +(y[3]-y[1])*N_list[0][1])**2
-		for j in range(1,numberOfLevels):
-			s += abs(y[2*j]-means[j][0]) + abs(y[2*j+1] - means[j][1])-((y[2*j]-means[j][0])*N_list[j][0]+(y[2*j+1]-means[j][1])*N_list[j][1])**2 
+		for j in range(numberOfLevels):
+			s += abs(y[2*j]-means[0][j])**2 + abs(y[2*j+1] - means[1][j])**2-((y[2*j]-means[0][j])*N_list[j][0]+(y[2*j+1]-means[1][j])*N_list[j][1])**2 
 		for j in range(1,numberOfLevels-1):
 			s += lam*((y[2*j+2]-y[2*j])*N_list[j][0] + (y[2*j+3]-y[2*j+1])*N_list[j][1])**2 
 		return s
 	
-	start = np.zeros(numberOfLevels*2)
-	ymin = fmin(e,start)
+
+	ymin = fmin(e,np.ravel(means))
 
 	"""
 	Step 4: returning the solutions.
@@ -180,19 +191,13 @@ def reconstructCurve(t0, t1, points, diffpoints, dom, N,numberOfLevels, lam=1):
 		z[j] = mu[j]*N_list[j]
 	
 	
-	y = np.zeros((numberOfLevels,2))
+	y = np.zeros((2,numberOfLevels))
 
 	for i in range(numberOfLevels):
-		y[i][0] = ymin[2*i]
-		y[i][1] = ymin[2*i+1]
-	
-	res = []	
-	print('ymin =', ymin)
-	for i in range(numberOfLevels):
-		f = lambda t: ymin[i] + Z_list[i](t)
-		res.append(f)
+		y[0][i] = ymin[2*i]
+		y[1][i] = ymin[2*i+1]
 
-	return res
+	return y,means, z
 
 
 
