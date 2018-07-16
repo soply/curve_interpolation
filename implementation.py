@@ -27,28 +27,8 @@ from problem_factory.sample_synthetic_data import sample_fromClass
 from visualisation.vis_nD import *
 
 
-def test(original_curve, t0 , t1, N,numberOfLevels):
-
-	dom,curve,coeff,x,tan,norm = sample_fromClass(t0, t1, original_curve,N,0.2)
-	ymin,means,z = reconstructCurve(t0, t1, x, tan, dom, N,numberOfLevels)
-
-	t = np.linspace(0,2,10)
-
-	fig, ax = handle_2D_plot()
-
-	print('ymin =', ymin)
-	print('means =', means)
-
-	add_scattered_pointcloud_simple(curve,ax,color = 'g',dim=2)
-	add_scattered_pointcloud_simple(ymin,ax,color = 'r', dim = 2)
-	add_scattered_pointcloud_simple(means,ax,color = 'b', dim = 2)
-
-	plt.show()
-	
-	
 
 def reconstructCurve(t0, t1, points, diffpoints, dom, N,numberOfLevels, lam=1):
-
 	
 	"""
 	Parameters
@@ -88,6 +68,9 @@ def reconstructCurve(t0, t1, points, diffpoints, dom, N,numberOfLevels, lam=1):
 		a vector that spans the set of solutions for the minimalization
 		problem. All solutions are on the form y + t*z, where t is a real
 		number. 
+	
+	L: np.array of floats, size M x numberOfPoints x 2
+		The level sets.
 
 	"""
 
@@ -133,11 +116,13 @@ def reconstructCurve(t0, t1, points, diffpoints, dom, N,numberOfLevels, lam=1):
 
 	for j in range(numberOfLevels):
 		t = 0
+		c = 0
 
-		for point in L[j]:
-			if point[0] != 0 or point[1] != 0:
-				t = t+1
-
+		while L[j][points[0].size-1-i][0]==0 and L[j][points[0].size-1-i][1]==0:
+			c = c+1
+			i = i+1
+		
+		t = points[0].size - c
 		
 		shiftedPoints = np.zeros((t,2))
 		P = np.zeros((t,2))
@@ -170,12 +155,14 @@ def reconstructCurve(t0, t1, points, diffpoints, dom, N,numberOfLevels, lam=1):
 		s = 0
 		for j in range(numberOfLevels):
 			s += abs(y[2*j]-means[0][j])**2 + abs(y[2*j+1] - means[1][j])**2-((y[2*j]-means[0][j])*N_list[j][0]+(y[2*j+1]-means[1][j])*N_list[j][1])**2 
-		for j in range(1,numberOfLevels-1):
+		for j in range(numberOfLevels-1):
 			s += lam*((y[2*j+2]-y[2*j])*N_list[j][0] + (y[2*j+3]-y[2*j+1])*N_list[j][1])**2 
 		return s
 	
-
-	ymin = fmin(e,np.ravel(means))
+	ymin = fmin(e,np.ravel(means.T))
+	
+	A = np.zeros((2*numberOfLevels,2*numberOfLevels))
+	#implementation of linear system here
 
 	"""
 	Step 4: returning the solutions.
@@ -197,10 +184,55 @@ def reconstructCurve(t0, t1, points, diffpoints, dom, N,numberOfLevels, lam=1):
 		y[0][i] = ymin[2*i]
 		y[1][i] = ymin[2*i+1]
 
-	return y,means, z
+	return y, means, z, L
 
 
+
+def test(original_curve, t0 , t1, N,numberOfLevels):
+
+	dom,curve,coeff,x,tan,norm = sample_fromClass(t0, t1, original_curve,N,0.2)
+	ymin,means,z,L = reconstructCurve(t0, t1, x, tan, dom, N,numberOfLevels)
+
+	fig, ax = handle_2D_plot()
+
+	add_scattered_pointcloud_simple(curve,ax,color = 'g',dim=2)
+	add_scattered_pointcloud_simple(ymin,ax,color = 'r', dim = 2)
+	add_scattered_pointcloud_simple(means,ax,color = 'b', dim = 2)
+
+	"""
+	Error estimation.
+	"""
+	def proj(point,i,k):
+		p = [0,0]
+		inner_prod = tan[0][0][k]*(point[0]-ymin[0][i]) + tan[1][0][k]*(point[1]-ymin[1][i])
+		
+		p[0] = ymin[0][i] + inner_prod*tan[0][0][k]
+		p[1] = ymin[0][i] + inner_prod*tan[1][0][k]
+
+		return p
+
+
+	err = 0
+	count = 0
+
+	for i in range(numberOfLevels):
+		c,j = 0,0
+		while L[i][x[0].size-1-j][0]==0 and L[i][x[0].size-1-j][1]==0:
+			c += 1
+			j += 1
+
+		trunk_value = x[0].size - c
+
+		for k in range(trunk_value):
+			err += abs(curve[count][0] - proj(L[i][k],i,count)[0])**2 
+			err += abs(curve[count][1] - proj(L[i][k],i,count)[1])**2 
+			count += count
+
+	err = 1.0/(x.size)*err
+	print('Error value:', err)
+	
+	plt.show()
 
 
 circle = cc.Circle_Piece_2D(2)
-test(circle,0,1.4,100,5)
+test(circle,0,1.4,1500,40)
