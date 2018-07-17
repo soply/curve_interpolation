@@ -162,8 +162,28 @@ def reconstructCurve(t0, t1, points, diffpoints, dom, N,numberOfLevels, lam=1):
 	ymin = fmin(e,np.ravel(means.T))
 	
 	A = np.zeros((2*numberOfLevels,2*numberOfLevels))
-	#implementation of linear system here
+	n = numberOfLevels
+	
+	A[0:2,0:2] = np.identity(2) - np.outer(N_list[0],N_list[0]) +lam*np.outer(N_list[0],N_list[0])
+	A[0:2,2:4] = -lam*np.outer(N_list[0],N_list[0])
+	A[2*n-2:2*n,2*n-4:2*n-2] = -lam*np.outer(N_list[n-2],N_list[n-2])
+	A[2*n-2:2*n,2*n-2:2*n] = np.identity(2) - np.outer(N_list[n-1],N_list[n-1]) + lam*np.outer(N_list[n-2],N_list[n-2])
 
+	for j in range(2,n):
+		A[2*j-2:2*j,2*j-2:2*j] = np.identity(2) -np.outer(N_list[j-1],N_list[j-1]) +lam*(np.outer(N_list[j-1],N_list[j-1]) +np.outer(N_list[j-2],N_list[j-2]))
+		A[2*j-2:2*j,2*j:2*j+2] = -lam*np.outer(N_list[j-1],N_list[j-1])
+		A[2*j-2:2*j,2*j-4:2*j-2] = -lam*np.outer(N_list[j-2],N_list[j-2])
+	
+	b = np.zeros(2*n)
+	for j in range(1,n):
+		temp1 = np.identity(2) - np.outer(N_list[j-1],N_list[j-1])
+		temp2 = np.array([means[0][j-1],means[1][j-1]]) 
+		b[2*j-2:2*j] = np.matmul(temp1,temp2)
+
+	A_inv = npl.pinv(A)
+	ymin_alt = np.matmul(A_inv,b)
+	
+	
 	"""
 	Step 4: returning the solutions.
 	"""
@@ -179,24 +199,29 @@ def reconstructCurve(t0, t1, points, diffpoints, dom, N,numberOfLevels, lam=1):
 	
 	
 	y = np.zeros((2,numberOfLevels))
+	y_alt = np.zeros((2,numberOfLevels))
 
 	for i in range(numberOfLevels):
 		y[0][i] = ymin[2*i]
 		y[1][i] = ymin[2*i+1]
 
-	return y, means, z, L
+		y_alt[0][i] = ymin_alt[2*i]
+		y_alt[1][i] = ymin_alt[2*i+1]
+
+	return y, y_alt, means, z, L
 
 
 
 def test(original_curve, t0 , t1, N,numberOfLevels):
 
 	dom,curve,coeff,x,tan,norm = sample_fromClass(t0, t1, original_curve,N,0.2)
-	ymin,means,z,L = reconstructCurve(t0, t1, x, tan, dom, N,numberOfLevels)
+	ymin,ymin_alt,means,z,L = reconstructCurve(t0, t1, x, tan, dom, N,numberOfLevels)
 
 	fig, ax = handle_2D_plot()
 
 	add_scattered_pointcloud_simple(curve,ax,color = 'g',dim=2)
 	add_scattered_pointcloud_simple(ymin,ax,color = 'r', dim = 2)
+	add_scattered_pointcloud_simple(ymin_alt,ax,color = 'y', dim = 2)
 	add_scattered_pointcloud_simple(means,ax,color = 'b', dim = 2)
 
 	"""
@@ -207,7 +232,7 @@ def test(original_curve, t0 , t1, N,numberOfLevels):
 		inner_prod = tan[0][0][k]*(point[0]-ymin[0][i]) + tan[1][0][k]*(point[1]-ymin[1][i])
 		
 		p[0] = ymin[0][i] + inner_prod*tan[0][0][k]
-		p[1] = ymin[0][i] + inner_prod*tan[1][0][k]
+		p[1] = ymin[1][i] + inner_prod*tan[1][0][k]
 
 		return p
 
@@ -224,15 +249,15 @@ def test(original_curve, t0 , t1, N,numberOfLevels):
 		trunk_value = x[0].size - c
 
 		for k in range(trunk_value):
-			err += abs(curve[count][0] - proj(L[i][k],i,count)[0])**2 
-			err += abs(curve[count][1] - proj(L[i][k],i,count)[1])**2 
-			count += count
+			err += abs(curve[0,count] - proj(L[i][k],i,count)[0])**2 
+			err += abs(curve[1,count] - proj(L[i][k],i,count)[1])**2 
+			count += 1
 
-	err = 1.0/(x.size)*err
+	err = 1.0/(x[0].size)*err
 	print('Error value:', err)
 	
 	plt.show()
 
 
 circle = cc.Circle_Piece_2D(2)
-test(circle,0,1.4,1500,40)
+test(circle,0,1.4,1500,20)
