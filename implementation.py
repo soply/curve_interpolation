@@ -105,7 +105,15 @@ def reconstructCurve(t0, t1, points, diffpoints, dom, N,numberOfLevels, lam=1):
 			means[0][i] = float(x_mean)/count 
 			means[1][i] = float(y_mean)/count
 
-	
+
+	def getNumberOfPointsInLevel(i):	
+		c = 0
+		while L[i][points[0].size-1-c][0]==0 and L[i][points[0].size-1-c][1]==0:
+			c += 1
+		
+		return points[0].size - c
+
+
 	"""
 	Step 2: creating the matrix P_j and finding Z_j
 	"""
@@ -113,22 +121,15 @@ def reconstructCurve(t0, t1, points, diffpoints, dom, N,numberOfLevels, lam=1):
 	matrix_list = []
 	N_list = []
 	Z_list = []
+		
 
 	for j in range(numberOfLevels):
-		t = 0
-		c = 0
-
-		while L[j][points[0].size-1-i][0]==0 and L[j][points[0].size-1-i][1]==0:
-			c = c+1
-			i = i+1
 		
-		t = points[0].size - c
-		
-		shiftedPoints = np.zeros((t,2))
-		P = np.zeros((t,2))
+		shiftedPoints = np.zeros((getNumberOfPointsInLevel(j),2))
+		P = np.zeros((getNumberOfPointsInLevel(j),2))
 
 
-		for i in range(t):
+		for i in range(getNumberOfPointsInLevel(j)):
 			shiftedPoints[i][0] = L[j][i][0] - means[0][j]
 			shiftedPoints[i][1] = L[j][i][1] - means[1][j]
 		
@@ -158,8 +159,7 @@ def reconstructCurve(t0, t1, points, diffpoints, dom, N,numberOfLevels, lam=1):
 		for j in range(numberOfLevels-1):
 			s += lam*((y[2*j+2]-y[2*j])*N_list[j][0] + (y[2*j+3]-y[2*j+1])*N_list[j][1])**2 
 		return s
-	
-	ymin = fmin(e,np.ravel(means.T))
+
 	
 	A = np.zeros((2*numberOfLevels,2*numberOfLevels))
 	n = numberOfLevels
@@ -181,7 +181,7 @@ def reconstructCurve(t0, t1, points, diffpoints, dom, N,numberOfLevels, lam=1):
 		b[2*j-2:2*j] = np.matmul(temp1,temp2)
 
 	A_inv = npl.pinv(A)
-	ymin_alt = np.matmul(A_inv,b)
+	ymin = np.matmul(A_inv,b)
 	
 	
 	"""
@@ -192,47 +192,60 @@ def reconstructCurve(t0, t1, points, diffpoints, dom, N,numberOfLevels, lam=1):
 	z = np.zeros((numberOfLevels,2))
 
 	mu[0] = 1
+	z[0] = N_list[0]
 
 	for j in range(1,numberOfLevels):
 		mu[j] = 1.0/(N_list[j-1][0]*N_list[j][0] +N_list[j-1][1]*N_list[j][1])*mu[j-1]
 		z[j] = mu[j]*N_list[j]
+
 	
+	t_opt = 0
+	denom = 0
+	for i in range(numberOfLevels):
+		prod = z[i][0]*ymin[2*i] + z[i][1]*ymin[2*i+1]
+
+		temp = 0
+		for k in range(getNumberOfPointsInLevel(i)):
+			temp += z[i][0]*L[i][k][0] + z[i][1]*L[i][k][1]
+		
+		t_opt += prod - 1.0/(getNumberOfPointsInLevel(i))*temp
+		denom += npl.norm(z[i])**2	
+
 	
+	t_opt = t_opt/(2-denom)  
+
 	y = np.zeros((2,numberOfLevels))
-	y_alt = np.zeros((2,numberOfLevels))
 
 	for i in range(numberOfLevels):
-		y[0][i] = ymin[2*i]
-		y[1][i] = ymin[2*i+1]
+		y[0][i] = ymin[2*i] + t_opt*z[i][0]
+		y[1][i] = ymin[2*i+1] + t_opt*z[i][1]
 
-		y_alt[0][i] = ymin_alt[2*i]
-		y_alt[1][i] = ymin_alt[2*i+1]
-
-	return y, y_alt, means, z, L
+	return y, means, z, L, N_list
 
 
 
 def test(original_curve, t0 , t1, N,numberOfLevels):
 
 	dom,curve,coeff,x,tan,norm = sample_fromClass(t0, t1, original_curve,N,0.2)
-	ymin,ymin_alt,means,z,L = reconstructCurve(t0, t1, x, tan, dom, N,numberOfLevels)
+	ymin,means,z,L,N = reconstructCurve(t0, t1, x, tan, dom, N,numberOfLevels)
 
 	fig, ax = handle_2D_plot()
 
 	add_scattered_pointcloud_simple(curve,ax,color = 'g',dim=2)
 	add_scattered_pointcloud_simple(ymin,ax,color = 'r', dim = 2)
-	add_scattered_pointcloud_simple(ymin_alt,ax,color = 'y', dim = 2)
 	add_scattered_pointcloud_simple(means,ax,color = 'b', dim = 2)
 
 	"""
 	Error estimation.
 	"""
-	def proj(point,i,k):
+
+	def proj(point,i):
 		p = [0,0]
-		inner_prod = tan[0][0][k]*(point[0]-ymin[0][i]) + tan[1][0][k]*(point[1]-ymin[1][i])
+		tan = np.array([(-1)*N[i][0],N[i][1]])
+		inner_prod = tan[0]*(point[0]-ymin[0][i]) + tan[1]*(point[1]-ymin[1][i])
 		
-		p[0] = ymin[0][i] + inner_prod*tan[0][0][k]
-		p[1] = ymin[1][i] + inner_prod*tan[1][0][k]
+		p[0] = ymin[0][i] + inner_prod*tan[0]
+		p[1] = ymin[1][i] + inner_prod*tan[1]
 
 		return p
 
@@ -241,16 +254,15 @@ def test(original_curve, t0 , t1, N,numberOfLevels):
 	count = 0
 
 	for i in range(numberOfLevels):
-		c,j = 0,0
-		while L[i][x[0].size-1-j][0]==0 and L[i][x[0].size-1-j][1]==0:
+		c = 0
+		while L[i][x[0].size-1-c][0]==0 and L[i][x[0].size-1-c][1]==0:
 			c += 1
-			j += 1
 
 		trunk_value = x[0].size - c
 
 		for k in range(trunk_value):
-			err += abs(curve[0,count] - proj(L[i][k],i,count)[0])**2 
-			err += abs(curve[1,count] - proj(L[i][k],i,count)[1])**2 
+			err += abs(curve[0][count] - proj(L[i][k],i)[0])**2 
+			err += abs(curve[1][count] - proj(L[i][k],i)[1])**2 
 			count += 1
 
 	err = 1.0/(x[0].size)*err
@@ -260,4 +272,4 @@ def test(original_curve, t0 , t1, N,numberOfLevels):
 
 
 circle = cc.Circle_Piece_2D(2)
-test(circle,0,1.4,1500,20)
+test(circle,0,1.4,200,30)
