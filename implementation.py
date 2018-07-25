@@ -14,6 +14,8 @@ import numpy.linalg as npl
 import pylab as pl
 import scipy.sparse.linalg as spl
 from scipy import sparse
+from sklearn.decomposition import PCA
+from partitioning.based_on_domain import create_partitioning_n
 
 
 
@@ -69,69 +71,35 @@ def reconstructCurve(t0, t1, points, diffpoints, dom, N,numberOfLevels, lam=1):
 	Step 1: Creating the level sets and calculating the mean of each level set.
 	"""
 
-	b0,b1 = t0,t1
-
-	b = np.linspace(b0,b1,numberOfLevels + 1)
-	L = np.zeros((numberOfLevels,points[0].size,2))
 	means = np.zeros((2,numberOfLevels))
 
+	labels = np.zeros(N).astype('int')
+	labels, edges = create_partitioning_n(dom, numberOfLevels)
+	
 	for i in range(numberOfLevels):
-		count = 0
-		for p in range(N):
-			if b[i] <= dom[p] and b[i+1] > dom[p]:
-				L[i][count] = [points[0][p],points[1][p]]
-				count = count +1
-		
-		x_mean,y_mean = 0,0
-		for k in range(count):
-			x_mean += L[i][k][0]
-			y_mean += L[i][k][1]
-		
-		
-		if count != 0:
-			means[0][i] = float(x_mean)/count 
-			means[1][i] = float(y_mean)/count
-
+		means[:,i] = np.mean(points[:,labels == i+1], axis = 1)
 
 
 	"""	
 	Helping function, returns the number of points in a given level set.
-	"""
-	
+	"""	
 
-	def getNumberOfPointsInLevel(i):	
-		c = 0
-		while L[i][points[0].size-1-c][0]==0 and L[i][points[0].size-1-c][1]==0:
-			c += 1
-	
-		return points[0].size - c
-
+	def getNumberOfPointsInLevel(i):
+		return len(np.where(labels == i+1))
 
 
 	"""
 	Step 2: Finding the avarage normal vector for each level set.
 	"""
-
+	pca = PCA()
 	N_list = []		
 
 	for j in range(numberOfLevels):
-		
-		shiftedPoints = np.zeros((getNumberOfPointsInLevel(j),2))
-		P = np.zeros((getNumberOfPointsInLevel(j),2))
-
-		for i in range(getNumberOfPointsInLevel(j)):
-			shiftedPoints[i][0] = L[j][i][0] - means[0][j]
-			shiftedPoints[i][1] = L[j][i][1] - means[1][j]
-		
-			P[i][0] = shiftedPoints[i][0]
-			P[i][1] = shiftedPoints[i][1]
-
-		u,s,v = npl.svd(P) 
-		n = v[0]	
+		pca = pca.fit(points[:,labels == j+1].T)
+		n = pca.components_[0,:]
 		
 		N_list.append(n)
 	
-
 	
 	"""
 	Step 3: Setting up the distance function and minimalizing it. 
@@ -218,16 +186,12 @@ def reconstructCurve(t0, t1, points, diffpoints, dom, N,numberOfLevels, lam=1):
 	for i in range(numberOfLevels):
 
 		prod = z[i][0]*ymin[2*i] + z[i][1]*ymin[2*i+1]
-
-		temp = 0
-		for k in range(getNumberOfPointsInLevel(i)):
-			temp += z[i][0]*L[i][k][0] + z[i][1]*L[i][k][1]
+		temp = z[i].dot(means[:,i])
 		
 		t_opt += 1.0/(getNumberOfPointsInLevel(i))*temp - prod
 		denom += npl.norm(z[i])**2	
 	
 	t_opt = t_opt/denom
-
 
 	
 	"""
@@ -240,7 +204,7 @@ def reconstructCurve(t0, t1, points, diffpoints, dom, N,numberOfLevels, lam=1):
 		y[0][i] = ymin[2*i] + t_opt*z[i][0]
 		y[1][i] = ymin[2*i+1] + t_opt*z[i][1]
 
-	return y, means, z, L, N_list
+	return y, means, z, labels, N_list
 
 
 
