@@ -1,8 +1,12 @@
 #imports
 import time
+import sys
+import os
 import numpy as np
 from implementation import reconstructCurve
-from joblib import Parallel, delayed
+from joblib import Parallel, delayed, dump, load 
+import matplotlib.pyplot as plt
+#from multiprocessing import Process, JoinableQueue 
 import problem_factory.curve_classes as cc
 from problem_factory.sample_synthetic_data import sample_fromClass
 
@@ -60,11 +64,21 @@ def error_test(original_curve, t0 , t1, Np,numberOfLevels,lam):
 			err += abs(curve[1][count] - proj(L[i][k],i)[1])**2 
 			count += 1	
 	
-	err = 1.0/(x[0].size)*err	
-	
-	print('Error value:', err,'with lambda =', lam,', number of levels=',
-							numberOfLevels,', and number of partitions =',Np)
+	err = 1.0/(x[0].size)*err
 
+	sys.stdout = open('results.txt','a')
+
+	print('Error value:', err,'\n',
+			'with lambda: ', lam, ', Number of level sets: ', 
+						numberOfLevels, ' and number of points: ', Np,'\n')
+
+	"""	
+	q.put('Error value: ' + str(err) + '\n' + \
+			'with lambda: ' + str(lam) + ', Number of level sets: ' \
+						+ str(numberOfLevels) + ' and number of points: '\
+													+ str(Np) + '\n' + '\n')
+	"""
+	
 	return err
 
 
@@ -95,6 +109,20 @@ def visual_test(original_curve, t0 , t1, Np,numberOfLevels,lam):
 	plt.show()
 
 
+def saver(q):	
+	with open('results.txt','w') as out:
+		while True:
+			val = q.get()
+
+			if val is None:
+				break
+			
+			out.write(val)
+			q.task_done()
+		q.task_done()
+
+
+import mmap
 
 if __name__ == '__main__':
 
@@ -108,10 +136,47 @@ if __name__ == '__main__':
 
 	lam = [0.1,1,10,1000]
 	levels = [5,10,50,100]
+
+
+	"""
+	q = mp.JoinableQueue()
+	p = mp.Process(target = saver, args = (q,))
+	p.start()
+
+	"""
+	out = open('results.txt','w')
+	out.close()
+		
+	err = Parallel(n_jobs=2)(delayed(error_test) 
+			(circle,0,1.4,50*lev,lev,l) for lev in levels for l in lam)
+
 	
-	err = Parallel(n_jobs=4)(delayed(error_test) 
-			(circle,0,1.4,50*lev,lev,l) for lev in levels for l in lam) 
+	res = open('results.txt','r')
 	
-	#error_test(circle,0,1.4,1000,100,1)
+	error = []
+	lamb = []
+	num_points = []
+
+	for line in res:
+		arr = line.split(' ')
+		
+		if len(arr) == 4:
+			error.append(float(arr[2]))
+
+		elif len(arr) == 20:
+			lamb.append(float(arr[4]))
+			num_points.append(float(arr[18]))
 	
+
+	plt.plot(num_points,error,'ro')
+	plt.xlabel('Number of points')
+	plt.ylabel('Error')
+	plt.show()
+
+		
+	"""	
+	q.put(None)
+	p.join()
+	"""
+	plt.show()
 	print('time:', (time.time()-start_time))
