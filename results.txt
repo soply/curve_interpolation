@@ -1,0 +1,5 @@
+('Error value:', 0.00075910959966625686, '\n', 'with lambda: ', 1000, ', Number of level sets: ', 10, ' and number of points: ', 500, '\n')
+('Error value:', 0.00035618233948210104, '\n', 'with lambda: ', 1000, ', Number of level sets: ', 20, ' and number of points: ', 1000, '\n')
+('Error value:', 0.00012217969896749208, '\n', 'with lambda: ', 1000, ', Number of level sets: ', 40, ' and number of points: ', 2000, '\n')
+('Error value:', 1.4044000213326691e-05, '\n', 'with lambda: ', 1000, ', Number of level sets: ', 80, ' and number of points: ', 4000, '\n')
+('Error value:', 3.9921865506258093e-06, '\n', 'with lambda: ', 1000, ', Number of level sets: ', 160, ' and number of points: ', 8000, '\n')
