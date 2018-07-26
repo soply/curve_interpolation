@@ -11,7 +11,7 @@ from problem_factory.sample_synthetic_data import sample_fromClass
 
 
 
-def error_test(original_curve, t0 , t1, Np,numberOfLevels,lam,error,idx):
+def error_test(original_curve, t0 , t1, Np,numberOfLevels,lam,error,idx,rep):
 	
 	"""
 	Function that estimates the error between the original curve and the
@@ -53,7 +53,7 @@ def error_test(original_curve, t0 , t1, Np,numberOfLevels,lam,error,idx):
 
 	err = 1.0/(x[0].size)*err
 	
-	error[idx] = [err,Np,lam]
+	error[idx,rep] = [err,Np,lam]
 
 
 
@@ -86,7 +86,20 @@ def visual_test(original_curve, t0 , t1, Np,numberOfLevels,lam):
 
 def error_plot(error):
 
-	plt.plot(error[:,1],error[:,0])
+	index = len(error[:,0,0])	
+	err = np.zeros((index,3))
+
+	for i in range(index):
+		av_err = np.mean(error[i,:,0])
+		err[i] = [av_err,error[i,0,1],error[i,0,2]]
+	
+	
+	for l in lam:
+		i = np.where(err[:,2] == l)
+		e =np.take(err,i, axis = 0)
+		plt.plot(e[:,:,1][0],e[:,:,0][0],label = 'lambda: ' + str(l))
+		plt.legend()
+
 	plt.xlabel('Number of points')
 	plt.ylabel('Error')
 	plt.yscale('log')
@@ -115,14 +128,18 @@ if __name__ == '__main__':
 	except FileExistsError:
 		pass
 
-	our_shape = np.zeros((len(lam)*len(levels),3))
+	rep = 10
+
+	our_shape = np.zeros((len(lam)*len(levels),rep,3))
 
 	error = np.memmap(os.path.join(folder, 'err'),
 				dtype='float64', shape=our_shape.shape,mode='w+')
 	
 	Parallel(n_jobs=2)(delayed(error_test) 
-			(circle,0,1.4,50*lev,lev,l,error,i*len(lam)+k) 
-				for i,lev in enumerate(levels) for k,l in enumerate(lam))
+			(circle,0,1.4,50*lev,lev,l,error,i*len(lam)+k,r) 
+								for i,lev in enumerate(levels) 
+										for k,l in enumerate(lam) 
+												for r in range(rep))
 
 	print(time.time()-start_time)
 	error_plot(error)
