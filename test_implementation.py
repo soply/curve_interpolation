@@ -3,15 +3,16 @@ import time
 import sys
 import os
 import numpy as np
-from implementation import reconstructCurve
+from implementation_D_dim import reconstructCurve
 from joblib import Parallel, delayed 
 import matplotlib.pyplot as plt
+import visualisation.vis_nD as vis
 import problem_factory.curve_classes as cc
 from problem_factory.sample_synthetic_data import sample_fromClass
 
 
 
-def error_test(original_curve, t0 , t1, Np,numberOfLevels,lam,error,idx,rep):
+def error_test(original_curve,t0,t1,Np,numberOfLevels,D,lam,error,idx,rep):
 	
 	"""
 	Function that estimates the error between the original curve and the
@@ -19,20 +20,15 @@ def error_test(original_curve, t0 , t1, Np,numberOfLevels,lam,error,idx,rep):
 	"""
 
 	def isNotValidRun():
-		return Np <= numberOfLevels
+		return Np <= numberOfLevels or  D < 0
 
 	if isNotValidRun():
 		return
 
 
 	dom,curve,coeff,x,tan,norm = sample_fromClass(t0,t1,original_curve,Np,0.2)
-	ymin,means,z,labels,N = reconstructCurve(t0,t1,x,tan,dom, Np,numberOfLevels,lam)
-
-
-	tangents_per_levelset = np.zeros((2,numberOfLevels))
-
-	for i in range(numberOfLevels):
-		tangents_per_levelset[:,i] = np.array([(-1)*N[i][1],N[i][0]])
+	ymin,means,labels,N,t = reconstructCurve(t0,t1,x,tan,dom,
+													Np,numberOfLevels,D,lam)
 
 	
 	"""
@@ -44,8 +40,7 @@ def error_test(original_curve, t0 , t1, Np,numberOfLevels,lam,error,idx,rep):
 	for i in range(numberOfLevels):
 
 		projections = (ymin[:,i] + \
-					np.outer(tangents_per_levelset[:,i],
-					(tangents_per_levelset[:,i])).dot((x[:,labels == i+1].T\
+					np.outer(t[i],(t[i])).dot((x[:,labels == i+1].T\
 														- ymin[:,i]).T).T).T
 
 		err += np.sum(np.square(np.linalg.norm(projections\
@@ -57,7 +52,7 @@ def error_test(original_curve, t0 , t1, Np,numberOfLevels,lam,error,idx,rep):
 
 
 
-def visual_test(original_curve, t0 , t1, Np,numberOfLevels,lam):
+def visual_test(original_curve, t0 , t1, Np,numberOfLevels,D,lam):
 
 	"""
 	Fuction that plots the original curve, the means of each level
@@ -65,20 +60,23 @@ def visual_test(original_curve, t0 , t1, Np,numberOfLevels,lam):
 	"""
 
 	def isNotValidRun():
-		return Np <= numberOfLevels
+		return Np <= numberOfLevels or D < 2 or D > 3 
 
 	if isNotValidRun():
 		return
 
-
 	dom,curve,coeff,x,tan,norm = sample_fromClass(t0,t1,original_curve,Np,0.2)
-	ymin,means,z,labels,N = reconstructCurve(t0,t1,x,tan,dom, Np,numberOfLevels,lam)
+	ymin,means, labels,N,t = reconstructCurve(t0,t1,x,tan,dom,
+													Np,numberOfLevels,D,lam)
+	
+	if D == 2:
+		fig, ax = vis.handle_2D_plot()
+	elif D == 3:
+		fig, ax = vis.handle_3D_plot()
 
-	fig, ax = handle_2D_plot()
-
-	add_scattered_pointcloud_simple(curve,ax,color = 'g',dim=2)
-	add_scattered_pointcloud_simple(ymin,ax,color = 'r', dim = 2)
-	add_scattered_pointcloud_simple(means,ax,color = 'b', dim = 2)
+	vis.add_scattered_pointcloud_simple(curve,ax,color = 'g',dim= D)
+	vis.add_scattered_pointcloud_simple(ymin,ax,color = 'r', dim = D)
+	vis.add_scattered_pointcloud_simple(means,ax,color = 'b', dim = D)
 
 	plt.show()
 
@@ -103,6 +101,7 @@ def error_plot(error):
 	plt.xlabel('Number of points')
 	plt.ylabel('Error')
 	plt.yscale('log')
+	plt.xscale('log')
 
 	plt.show()
 		
@@ -117,9 +116,11 @@ if __name__ == '__main__':
 	start_time = time.time()
 	
 	circle = cc.Circle_Piece_2D(2)
+	helix = cc.Helix_Curve_3D(3)
 
-	lam = [0.1,1,10,1000]
-	levels = [5,10,50,100]
+
+	lam = [1,10,1000,100000]
+	levels = [5,10,20,50,100,200]
 	
 	folder = './joblib_memmap'
 
@@ -136,11 +137,18 @@ if __name__ == '__main__':
 				dtype='float64', shape=our_shape.shape,mode='w+')
 	
 	Parallel(n_jobs=2)(delayed(error_test) 
-			(circle,0,1.4,50*lev,lev,l,error,i*len(lam)+k,r) 
+			(helix,0,1.4,50*lev,lev,3,l,error,i*len(lam)+k,r) 
 								for i,lev in enumerate(levels) 
 										for k,l in enumerate(lam) 
 												for r in range(rep))
-
-	print(time.time()-start_time)
 	error_plot(error)
 
+	Parallel(n_jobs=2)(delayed(error_test) 
+			(circle,0,1.4,50*lev,lev,2,l,error,i*len(lam)+k,r) 
+								for i,lev in enumerate(levels) 
+										for k,l in enumerate(lam) 
+												for r in range(rep))
+	print(time.time()-start_time)
+
+	error_plot(error)
+	visual_test(helix, 0,1,1000,20,3,1)
