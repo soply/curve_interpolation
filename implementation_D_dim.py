@@ -13,7 +13,7 @@ import numpy as np
 import numpy.linalg as npl
 import pylab as pl
 import scipy.sparse.linalg as spl
-from scipy import sparse
+from scipy import sparse, optimize
 from sklearn.decomposition import PCA
 from partitioning.based_on_domain import create_partitioning_n
 import problem_factory.curve_classes as cc
@@ -22,7 +22,7 @@ import pdb
 
 
 
-def reconstructCurve(t0, t1, points, diffpoints,dom,N,numberOfLevels,D, lam=1):
+def reconstructCurve(t0, t1, points, diffpoints,dom,N,numberOfLevels,D):
 	
 	"""
 	Parameters
@@ -101,8 +101,8 @@ def reconstructCurve(t0, t1, points, diffpoints,dom,N,numberOfLevels,D, lam=1):
 
 	for j in range(numberOfLevels):
 		pca = pca.fit(points[:,labels == j+1].T)
-		n = pca.components_[0:D-1,:]
-		t = pca.components_[D-1,:]
+		n = pca.components_[0:-1,:]
+		t = pca.components_[-1,:]
 		
 		N_list.append(n)
 		t_list.append(t)
@@ -120,31 +120,32 @@ def reconstructCurve(t0, t1, points, diffpoints,dom,N,numberOfLevels,D, lam=1):
 		P_ort[j] = np.outer(t_list[j],t_list[j])
 		P_par[j] = np.identity(D) - P_ort[j]
 
+
 	def dist(y):
 		s = 0
 		for j in range(numberOfLevels):			
-			s += npl.norm(np.matmul(P_par[j],(y[D*j:D*j+D]-means[j])))**2 
+			s += npl.norm(np.matmul(P_ort[j],(y[D*j:D*j+D]-means[:,j])))**2 
 
 		for j in range(numberOfLevels-1):
-			s += lam*npl.norm(np.matmul(P_ort[j],
+			s += npl.norm(np.matmul(P_par[j],
 							(y[D*(j+1):D*(j+1)+D]-y[D*j:D*j+D])))**2
 
 		return s
 
-
+	
 	n = numberOfLevels
 
 	diag = np.zeros((n,D,D))
 	upper_diag = np.zeros((n-1,D,D))
 	lower_diag = np.zeros((n-1,D,D))	
 
-	diag[0] = P_ort[0] + lam*P_par[0]
-	diag[n-1] = P_ort[n-1] + lam*P_par[n-2]
+	diag[0] = P_ort[0] + P_par[0]
+	diag[n-1] = P_ort[n-1] + P_par[n-2]
 
 	for j in range(1,n):
-		diag[j] = P_ort[j] + lam*P_par[j] + lam*P_par[j-1]
-		upper_diag[j-1] = -lam*P_par[j-1]
-		lower_diag[j-1] = -lam*P_par[j-1]
+		diag[j] = P_ort[j] + P_par[j] + P_par[j-1]
+		upper_diag[j-1] = -P_par[j-1]
+		lower_diag[j-1] = -P_par[j-1]
 	 
 
 	A = sparse.bmat([[diag[i] if i == j 
@@ -163,6 +164,7 @@ def reconstructCurve(t0, t1, points, diffpoints,dom,N,numberOfLevels,D, lam=1):
 
 	ymin = spl.spsolve(A,b)	
 	
+	
 	y = np.zeros((D,numberOfLevels))
 
 	for i in range(numberOfLevels):
@@ -175,22 +177,22 @@ def reconstructCurve(t0, t1, points, diffpoints,dom,N,numberOfLevels,D, lam=1):
 	
 	We find the the optimal solution.
 	"""
-
-	M = np.zeros((D-1,D-1))
-	m = np.zeros(D-1)
-	prod = P_par[-1]
-
-	for l in range(numberOfLevels-1):
-
-		T = np.matmul(prod,N_list[-1].T)
-		M += np.matmul(T.T,T)
-		m += np.matmul(T.T,(means[:,-(l+1)]-y[:,-(l+1)]))	
-		prod = np.matmul(prod,P_par[-(l+2)])
-
+	Msum= np.zeros((D,D))
+	msum = np.zeros(D)
+	prod = np.eye(D)
+	
+	for l in range(numberOfLevels):
+		prod = np.matmul(P_par[-(l+1)],prod)
+		Msum += np.matmul(prod.T,prod)
+		msum += np.matmul(prod.T,(means[:,-(l+1)] - y[:,-(l+1)]))
+	
+	M = np.matmul(N_list[-1],Msum)
+	M = np.matmul(M,N_list[-1].T)
+	m = np.matmul(N_list[-1],msum)
 
 	u = npl.solve(M,m)
-	
 
+	
 	z = np.zeros((D,numberOfLevels))
 
 	for i in range(numberOfLevels-1):

@@ -12,7 +12,7 @@ from problem_factory.sample_synthetic_data import sample_fromClass
 
 
 
-def error_test(original_curve,t0,t1,Np,numberOfLevels,D,lam,error,idx,rep):
+def error_test(original_curve,t0,t1,Np,numberOfLevels,D,error,idx,rep,s):
 	
 	"""
 	Function that estimates the error between the original curve and the
@@ -26,9 +26,9 @@ def error_test(original_curve,t0,t1,Np,numberOfLevels,D,lam,error,idx,rep):
 		return
 
 
-	dom,curve,coeff,x,tan,norm = sample_fromClass(t0,t1,original_curve,Np,0.2)
+	dom,curve,coeff,x,tan,norm = sample_fromClass(t0,t1,original_curve,Np,s)
 	ymin,means,labels,N,t = reconstructCurve(t0,t1,x,tan,dom,
-													Np,numberOfLevels,D,lam)
+														Np,numberOfLevels,D)
 
 	
 	"""
@@ -48,7 +48,7 @@ def error_test(original_curve,t0,t1,Np,numberOfLevels,D,lam,error,idx,rep):
 
 	err = 1.0/(x[0].size)*err
 	
-	error[idx,rep] = [err,Np,lam]
+	error[idx,rep] = [err,Np,s]
 
 
 
@@ -67,7 +67,7 @@ def visual_test(original_curve, t0 , t1, Np,numberOfLevels,D,lam):
 
 	dom,curve,coeff,x,tan,norm = sample_fromClass(t0,t1,original_curve,Np,0.2)
 	ymin,means, labels,N,t = reconstructCurve(t0,t1,x,tan,dom,
-													Np,numberOfLevels,D,lam)
+													Np,numberOfLevels,D)
 	
 	if D == 2:
 		fig, ax = vis.handle_2D_plot()
@@ -84,7 +84,7 @@ def visual_test(original_curve, t0 , t1, Np,numberOfLevels,D,lam):
 
 def error_plot(error):
 
-	index = len(error[:,0,0])	
+	index = len(error[:,0,0])
 	err = np.zeros((index,3))
 
 	for i in range(index):
@@ -92,10 +92,10 @@ def error_plot(error):
 		err[i] = [av_err,error[i,0,1],error[i,0,2]]
 	
 	
-	for l in lam:
-		i = np.where(err[:,2] == l)
-		e =np.take(err,i, axis = 0)
-		plt.plot(e[:,:,1][0],e[:,:,0][0],label = 'lambda: ' + str(l))
+	for s in sigma:
+		i = np.where(err[:,2] == s)
+		e = np.take(err,i,axis = 0)
+		plt.plot(e[:,:,1][0],e[:,:,0][0], label = 'sigma: ' + str(s))
 		plt.legend()
 
 	plt.xlabel('Number of points')
@@ -112,15 +112,19 @@ if __name__ == '__main__':
 	"""
 	Paralell error testing with circle piece as original curve.
 	"""
+	if len(sys.argv) > 1:
+		n_jobs = int(sys.argv[1])
+	else:
+		n_jobs = 4 
+
 
 	start_time = time.time()
-	
+
 	circle = cc.Circle_Piece_2D(2)
 	helix = cc.Helix_Curve_3D(3)
 
-
-	lam = [1,10,1000,100000]
-	levels = [5,10,20,50,100,200]
+	levels = [5,10,100,200]
+	sigma = [0.001,0.01,0.1,0.5]
 	
 	folder = './joblib_memmap'
 
@@ -131,24 +135,26 @@ if __name__ == '__main__':
 
 	rep = 10
 
-	our_shape = np.zeros((len(lam)*len(levels),rep,3))
-
+	our_shape = np.zeros((len(sigma)*len(levels),rep,3))
+	
 	error = np.memmap(os.path.join(folder, 'err'),
 				dtype='float64', shape=our_shape.shape,mode='w+')
 	
-	Parallel(n_jobs=2)(delayed(error_test) 
-			(helix,0,1.4,50*lev,lev,3,l,error,i*len(lam)+k,r) 
-								for i,lev in enumerate(levels) 
-										for k,l in enumerate(lam) 
-												for r in range(rep))
+	Parallel(n_jobs=n_jobs)(delayed(error_test) 
+			(helix,0,1.4,50*lev,lev,3,error,i*len(sigma)+k,r,s) 
+									for i,lev in enumerate(levels)
+											for k,s in enumerate(sigma)
+														for r in range(rep))
+	
 	error_plot(error)
-
-	Parallel(n_jobs=2)(delayed(error_test) 
-			(circle,0,1.4,50*lev,lev,2,l,error,i*len(lam)+k,r) 
-								for i,lev in enumerate(levels) 
-										for k,l in enumerate(lam) 
-												for r in range(rep))
+	"""	
+	Parallel(n_jobs=n_jobs)(delayed(error_test) 
+			(circle,0,1.4,50*lev,lev,2,error,i*len(sigma)+k,r,s) 
+									for i,lev in enumerate(levels)
+											for k,s in enumerate(sigma)
+														for r in range(rep))
+	"""
 	print(time.time()-start_time)
 
-	error_plot(error)
-	visual_test(helix, 0,1,1000,20,3,1)
+	#error_plot(error)
+
