@@ -27,8 +27,7 @@ def error_test(original_curve,t0,t1,Np,numberOfLevels,D,error,idx,rep,s):
 
 
 	dom,curve,coeff,x,tan,norm = sample_fromClass(t0,t1,original_curve,Np,s)
-	ymin,means,labels,N,t = reconstructCurve(t0,t1,x,tan,dom,
-														Np,numberOfLevels,D)
+	ymin,means,labels,N,t = reconstructCurve(t0,t1,x,dom,Np,numberOfLevels,D)
 
 	
 	"""
@@ -52,11 +51,11 @@ def error_test(original_curve,t0,t1,Np,numberOfLevels,D,error,idx,rep,s):
 
 
 
-def visual_test(original_curve, t0 , t1, Np,numberOfLevels,D,lam):
+def visual_test(original_curve, t0 , t1, Np,numberOfLevels,D):
 
 	"""
 	Fuction that plots the original curve, the means of each level
-	set and the reconstructed curve.
+	set, and the reconstructed curve.
 	"""
 
 	def isNotValidRun():
@@ -66,8 +65,7 @@ def visual_test(original_curve, t0 , t1, Np,numberOfLevels,D,lam):
 		return
 
 	dom,curve,coeff,x,tan,norm = sample_fromClass(t0,t1,original_curve,Np,0.2)
-	ymin,means, labels,N,t = reconstructCurve(t0,t1,x,tan,dom,
-													Np,numberOfLevels,D)
+	ymin,means, labels,N,t = reconstructCurve(t0,t1,x,dom,Np,numberOfLevels,D)
 	
 	if D == 2:
 		fig, ax = vis.handle_2D_plot()
@@ -109,9 +107,7 @@ def error_plot(error):
 
 if __name__ == '__main__':
 
-	"""
-	Paralell error testing with circle piece as original curve.
-	"""
+
 	if len(sys.argv) > 1:
 		n_jobs = int(sys.argv[1])
 	else:
@@ -119,7 +115,8 @@ if __name__ == '__main__':
 
 
 	start_time = time.time()
-
+	
+	#test curves
 	circle = cc.Circle_Piece_2D(2)
 	helix = cc.Helix_Curve_3D(3)
 
@@ -139,7 +136,7 @@ if __name__ == '__main__':
 	
 	error = np.memmap(os.path.join(folder, 'err'),
 				dtype='float64', shape=our_shape.shape,mode='w+')
-	
+	"""
 	Parallel(n_jobs=n_jobs)(delayed(error_test) 
 			(helix,0,1.4,50*lev,lev,3,error,i*len(sigma)+k,r,s) 
 									for i,lev in enumerate(levels)
@@ -147,6 +144,9 @@ if __name__ == '__main__':
 														for r in range(rep))
 	
 	error_plot(error)
+	"""
+	visual_test(helix,0,1,1000,20,3)
+	visual_test(circle,0,1,1000,20,2)
 	"""	
 	Parallel(n_jobs=n_jobs)(delayed(error_test) 
 			(circle,0,1.4,50*lev,lev,2,error,i*len(sigma)+k,r,s) 

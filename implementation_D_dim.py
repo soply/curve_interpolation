@@ -1,5 +1,5 @@
 """
-Implementation of an Algorithm in order to reconstruct at curve from a
+Implementation of an Algorithm in order to reconstruct at surface from a
 scattered set of points with orthogonal error.
 
 Based on the Master's thesis of Johannes Piendl "Learning a Manifold from
@@ -22,7 +22,7 @@ import pdb
 
 
 
-def reconstructCurve(t0, t1, points, diffpoints,dom,N,numberOfLevels,D):
+def reconstructCurve(t0, t1, points,dom,N,numberOfLevels,D):
 	
 	"""
 	Parameters
@@ -37,35 +37,34 @@ def reconstructCurve(t0, t1, points, diffpoints,dom,N,numberOfLevels,D):
 	points: np.array of floats, size 2 x M
 		Scattered points around the curve with orthogonal error.
 	
-	diffpoints: np.array of floats, size 2 x M
-		The values of the derivatives of the curve at each partition.
-
 	dom: np.array of floats, size N
 		Time points sampled in [t0,t1].
 
 	numberOfLevels: integer
 		Number of level sets.
 
+	D: integer
+		Dimension of the surface. 
+
 
 	Returns
 	==================
 	
-	y: np.array of floats, size 2 x M
-		The optimal minimalization of the distance function.
+	opt_vec: np.array of floats, size D x M
+		A set of points that approximate the curve.
 	
 	means: np.array of floats, size 2 x M
 		The mean points of each level set.
 
-	z: np.array of floats, size M x 2 
-		a vector that spans the set of solutions for the minimalization
-		problem. All solutions are on the form y + t*z, where t is a real
-		number. 
-	
-	L: np.array of floats, size M x numberOfPoints x 2
+		
+	labels: np.array of floats, size M x numberOfPoints x 2
 		The level sets.
 
-	N_list: list of vectors, size M
-		The avarage normal vector for each level set.
+	N_list: list of matrices, size M
+		The avarage normal plane/vector for each level set.
+	
+	t_list: list of vectors, size M
+		The avarage tangent for each level set.
 
 	"""
 
@@ -131,8 +130,45 @@ def reconstructCurve(t0, t1, points, diffpoints,dom,N,numberOfLevels,D):
 							(y[D*(j+1):D*(j+1)+D]-y[D*j:D*j+D])))**2
 
 		return s
-
 	
+	n = numberOfLevels
+	
+	y_ort = np.zeros((D,n))
+
+	for i in range(numberOfLevels-1):	
+		y_ort[:,i] = np.matmul(P_ort[i],means[:,i])
+
+	upper_diag = np.zeros((n-1,D,D-1))
+	b = np.zeros(D*(n-1))
+	diag = np.zeros((n-1,D,D-1))
+
+	for i in range(numberOfLevels-1):
+		upper_diag[i] = -np.matmul(N_list[i].T,np.matmul(N_list[i],N_list[i+1].T))
+		b[D*i:D*i+D] = np.matmul(N_list[i].T,np.matmul(N_list[i],y_ort[:,i+1]))
+		diag[i] = N_list[i].T
+	
+	
+	A = sparse.bmat([[diag[i] if i == j 
+						else upper_diag[j] if i-j == 1   
+						else None for i in range(n)] 
+							for j in range(n-1)], format = 'csc')
+	
+	
+	u = spl.lsqr(A,b)
+	u = u[0]
+
+	neu = np.zeros((D-1,n))
+
+	for i in range(numberOfLevels):
+		neu[:,i] = u[(D-1)*i:(D-1)*i+(D-1)]
+
+
+	y = np.zeros((D,numberOfLevels))
+	for i in range(numberOfLevels):
+		y[:,i] = y_ort[:,i] + np.matmul(N_list[i].T,neu[:,i])
+
+		
+	"""
 	n = numberOfLevels
 
 	diag = np.zeros((n,D,D))
@@ -163,14 +199,14 @@ def reconstructCurve(t0, t1, points, diffpoints,dom,N,numberOfLevels,D):
 	
 
 	ymin = spl.spsolve(A,b)	
-	
+		
 	
 	y = np.zeros((D,numberOfLevels))
 
 	for i in range(numberOfLevels):
 		y[:,i] = ymin[D*i:D*i+D]
 
-
+	"""
 	"""
 	The minimalization of the distance funtion is not uniqe, all solutions are
 	on the for ymin + t*z, where z is a vector in the kernel of A. 
@@ -208,6 +244,6 @@ def reconstructCurve(t0, t1, points, diffpoints,dom,N,numberOfLevels,D):
 	"""
 	Returning the solution.
 	"""
-
+	
 	return opt_vec, means, labels, N_list, t_list
 
