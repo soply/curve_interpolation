@@ -51,6 +51,7 @@ def error_test(original_curve,t0,t1,Np,numberOfLevels,D,error,idx,rep,s):
 
 
 
+
 def visual_test(original_curve, t0 , t1, Np,numberOfLevels,D):
 
 	"""
@@ -80,7 +81,13 @@ def visual_test(original_curve, t0 , t1, Np,numberOfLevels,D):
 
 
 
+
 def error_plot(error):
+
+	"""
+	Function that plots the esstimated error against the number of points for
+	each sigma.
+	"""
 
 	index = len(error[:,0,0])
 	err = np.zeros((index,3))
@@ -105,24 +112,26 @@ def error_plot(error):
 		
 
 
+
 if __name__ == '__main__':
 
+	start_time = time.time()
 
 	if len(sys.argv) > 1:
 		n_jobs = int(sys.argv[1])
 	else:
 		n_jobs = 4 
 
-
-	start_time = time.time()
 	
-	#test curves
+	# test curves and test values.
 	circle = cc.Circle_Piece_2D(2)
 	helix = cc.Helix_Curve_3D(3)
 
 	levels = [5,10,100,200]
-	sigma = [0.001,0.01,0.1,0.5]
-	
+	sigma = [0.01,0.1,0.5]
+
+
+	# Creating a memory-map in order to store the errror measurments.
 	folder = './joblib_memmap'
 
 	try:
@@ -136,25 +145,27 @@ if __name__ == '__main__':
 	
 	error = np.memmap(os.path.join(folder, 'err'),
 				dtype='float64', shape=our_shape.shape,mode='w+')
-	"""
+	
+	
+	# Running the tests.
 	Parallel(n_jobs=n_jobs)(delayed(error_test) 
 			(helix,0,1.4,50*lev,lev,3,error,i*len(sigma)+k,r,s) 
 									for i,lev in enumerate(levels)
 											for k,s in enumerate(sigma)
 														for r in range(rep))
-	
 	error_plot(error)
-	"""
-	visual_test(helix,0,1,1000,20,3)
-	visual_test(circle,0,1,1000,20,2)
-	"""	
+	
+	
 	Parallel(n_jobs=n_jobs)(delayed(error_test) 
 			(circle,0,1.4,50*lev,lev,2,error,i*len(sigma)+k,r,s) 
 									for i,lev in enumerate(levels)
 											for k,s in enumerate(sigma)
 														for r in range(rep))
-	"""
+	
 	print(time.time()-start_time)
 
-	#error_plot(error)
+	#visual_test(helix,0,1,1000,20,3)
+	#visual_test(circle,0,1,1000,20,2)
+
+	error_plot(error)
 

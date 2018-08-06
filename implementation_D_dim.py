@@ -8,17 +8,12 @@ Functional Data in Low Dimension".
 
 
 # Imports
-import matplotlib.pyplot as plt 
 import numpy as np
 import numpy.linalg as npl
-import pylab as pl
 import scipy.sparse.linalg as spl
 from scipy import sparse, optimize
 from sklearn.decomposition import PCA
 from partitioning.based_on_domain import create_partitioning_n
-import problem_factory.curve_classes as cc
-from problem_factory.sample_synthetic_data import sample_fromClass
-import pdb
 
 
 
@@ -55,7 +50,6 @@ def reconstructCurve(t0, t1, points,dom,N,numberOfLevels,D):
 	
 	means: np.array of floats, size 2 x M
 		The mean points of each level set.
-
 		
 	labels: np.array of floats, size M x numberOfPoints x 2
 		The level sets.
@@ -82,18 +76,17 @@ def reconstructCurve(t0, t1, points,dom,N,numberOfLevels,D):
 		means[:,i] = np.mean(points[:,labels == i+1], axis = 1)
 	
 
-
-	"""	
-	Helping function, returns the number of points in a given level set.
-	"""	
-
+		
+	#Helping function, returns the number of points in a given level set.
 	def getNumberOfPointsInLevel(i):
 		return len(np.where(labels == i+1))
 
 
+	
 	"""
 	Step 2: Finding the avarage normal vector for each level set.
 	"""
+
 	pca = PCA()
 	N_list = []
 	t_list = []
@@ -107,11 +100,13 @@ def reconstructCurve(t0, t1, points,dom,N,numberOfLevels,D):
 		t_list.append(t)
 
 	
+	
 	"""
 	Step 3: Setting up the distance function and minimalizing it. 
 
 	"""
 	
+	# Projection operators onto the normal and the tangential part of the curve
 	P_par = np.zeros((numberOfLevels,D,D))
 	P_ort = np.zeros((numberOfLevels,D,D))
 
@@ -119,7 +114,8 @@ def reconstructCurve(t0, t1, points,dom,N,numberOfLevels,D):
 		P_ort[j] = np.outer(t_list[j],t_list[j])
 		P_par[j] = np.identity(D) - P_ort[j]
 
-
+	
+	# The distanse function.
 	def dist(y):
 		s = 0
 		for j in range(numberOfLevels):			
@@ -130,50 +126,15 @@ def reconstructCurve(t0, t1, points,dom,N,numberOfLevels,D):
 							(y[D*(j+1):D*(j+1)+D]-y[D*j:D*j+D])))**2
 
 		return s
+
 	
 	n = numberOfLevels
-	
-	y_ort = np.zeros((D,n))
 
-	for i in range(numberOfLevels-1):	
-		y_ort[:,i] = np.matmul(P_ort[i],means[:,i])
-
-	upper_diag = np.zeros((n-1,D,D-1))
-	b = np.zeros(D*(n-1))
-	diag = np.zeros((n-1,D,D-1))
-
-	for i in range(numberOfLevels-1):
-		upper_diag[i] = -np.matmul(N_list[i].T,np.matmul(N_list[i],N_list[i+1].T))
-		b[D*i:D*i+D] = np.matmul(N_list[i].T,np.matmul(N_list[i],y_ort[:,i+1]))
-		diag[i] = N_list[i].T
-	
-	
-	A = sparse.bmat([[diag[i] if i == j 
-						else upper_diag[j] if i-j == 1   
-						else None for i in range(n)] 
-							for j in range(n-1)], format = 'csc')
-	
-	
-	u = spl.lsqr(A,b)
-	u = u[0]
-
-	neu = np.zeros((D-1,n))
-
-	for i in range(numberOfLevels):
-		neu[:,i] = u[(D-1)*i:(D-1)*i+(D-1)]
-
-
-	y = np.zeros((D,numberOfLevels))
-	for i in range(numberOfLevels):
-		y[:,i] = y_ort[:,i] + np.matmul(N_list[i].T,neu[:,i])
-
-		
-	"""
-	n = numberOfLevels
-
+	# Implementation of the linear system that arises when setting the gradient
+	# of the distance function to zero.
 	diag = np.zeros((n,D,D))
 	upper_diag = np.zeros((n-1,D,D))
-	lower_diag = np.zeros((n-1,D,D))	
+	lower_diag = np.zeros((n,D,D))	
 
 	diag[0] = P_ort[0] + P_par[0]
 	diag[n-1] = P_ort[n-1] + P_par[n-2]
@@ -183,6 +144,8 @@ def reconstructCurve(t0, t1, points,dom,N,numberOfLevels,D):
 		upper_diag[j-1] = -P_par[j-1]
 		lower_diag[j-1] = -P_par[j-1]
 	 
+	lower_diag[n-1] = P_ort[n-1]
+
 
 	A = sparse.bmat([[diag[i] if i == j 
 						else upper_diag[j] if i-j == 1 
@@ -197,22 +160,26 @@ def reconstructCurve(t0, t1, points,dom,N,numberOfLevels,D):
 		temp1 = P_ort[j-1]
 		b[D*j-D:D*j] = np.matmul(temp1,means[:,j-1])
 	
-
+	
+	# Solving the linear system.
 	ymin = spl.spsolve(A,b)	
 		
 	
+	# Rewreiting the solution to a more usable form.
 	y = np.zeros((D,numberOfLevels))
 
 	for i in range(numberOfLevels):
 		y[:,i] = ymin[D*i:D*i+D]
 
-	"""
+	
+
 	"""
 	The minimalization of the distance funtion is not uniqe, all solutions are
 	on the for ymin + t*z, where z is a vector in the kernel of A. 
 	
-	We find the the optimal solution.
+	Step 4: Finding the the optimal solution.
 	"""
+
 	Msum= np.zeros((D,D))
 	msum = np.zeros(D)
 	prod = np.eye(D)
@@ -241,9 +208,7 @@ def reconstructCurve(t0, t1, points,dom,N,numberOfLevels,D):
 	opt_vec = y + z
 
 
-	"""
-	Returning the solution.
-	"""
-	
+
+	# Returning the solution.	
 	return opt_vec, means, labels, N_list, t_list
 
