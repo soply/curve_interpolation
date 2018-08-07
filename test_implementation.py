@@ -3,7 +3,9 @@ import time
 import sys
 import os
 import numpy as np
-from implementation_D_dim import reconstructCurve
+import implementation_D_dim as imp
+import mls
+
 from joblib import Parallel, delayed 
 import matplotlib.pyplot as plt
 import visualisation.vis_nD as vis
@@ -27,9 +29,13 @@ def error_test(original_curve,t0,t1,Np,numberOfLevels,D,error,idx,rep,s):
 
 
 	dom,curve,coeff,x,tan,norm = sample_fromClass(t0,t1,original_curve,Np,s)
-	ymin,means,labels,N,t = reconstructCurve(t0,t1,x,dom,Np,numberOfLevels,D)
-
 	
+	if (sys.argv[2] == 'mls') or (sys.argv[1] == 'mls'):
+		ymin,means,labels,t = mls.reconstructCurve(t0,t1,x,dom,Np,numberOfLevels,D)
+	else:
+		ymin,means,labels,t = imp.reconstructCurve(t0,t1,x,dom,Np,numberOfLevels,D)
+	
+
 	"""
 	Calculation of the error.
 	"""
@@ -66,8 +72,14 @@ def visual_test(original_curve, t0 , t1, Np,numberOfLevels,D):
 		return
 
 	dom,curve,coeff,x,tan,norm = sample_fromClass(t0,t1,original_curve,Np,0.2)
-	ymin,means, labels,N,t = reconstructCurve(t0,t1,x,dom,Np,numberOfLevels,D)
 	
+
+	if (sys.argv[2] == 'mls') or (sys.argv[1] == 'mls'):
+		ymin,means,labels,t = mls.reconstructCurve(t0,t1,x,dom,Np,numberOfLevels,D)
+	else:
+		ymin,means,labels,t = imp.reconstructCurve(t0,t1,x,dom,Np,numberOfLevels,D)
+	
+
 	if D == 2:
 		fig, ax = vis.handle_2D_plot()
 	elif D == 3:
@@ -117,11 +129,10 @@ if __name__ == '__main__':
 
 	start_time = time.time()
 
-	if len(sys.argv) > 1:
+	try:
 		n_jobs = int(sys.argv[1])
-	else:
-		n_jobs = 4 
-
+	except:
+		n_jobs = 4
 	
 	# test curves and test values.
 	circle = cc.Circle_Piece_2D(2)
@@ -146,7 +157,7 @@ if __name__ == '__main__':
 	error = np.memmap(os.path.join(folder, 'err'),
 				dtype='float64', shape=our_shape.shape,mode='w+')
 	
-	
+	"""
 	# Running the tests.
 	Parallel(n_jobs=n_jobs)(delayed(error_test) 
 			(helix,0,1.4,50*lev,lev,3,error,i*len(sigma)+k,r,s) 
@@ -161,11 +172,11 @@ if __name__ == '__main__':
 									for i,lev in enumerate(levels)
 											for k,s in enumerate(sigma)
 														for r in range(rep))
-	
+	"""
 	print(time.time()-start_time)
 
-	#visual_test(helix,0,1,1000,20,3)
-	#visual_test(circle,0,1,1000,20,2)
+	visual_test(helix,0,1,1000,20,3)
+	visual_test(circle,0,1,1000,20,2)
 
-	error_plot(error)
+	#error_plot(error)
 
