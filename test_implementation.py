@@ -1,11 +1,10 @@
 #imports
-import time
 import sys
 import os
 import numpy as np
-import implementation_D_dim as imp
+import numpy.linalg as npl
+import implementation as imp
 import mls
-
 from joblib import Parallel, delayed 
 import matplotlib.pyplot as plt
 import visualisation.vis_nD as vis
@@ -14,7 +13,8 @@ from problem_factory.sample_synthetic_data import sample_fromClass
 
 
 
-def error_test(original_curve,t0,t1,Np,numberOfLevels,D,error,idx,rep,s):
+
+def error_test(original_curve,t0,t1,Np,numberOfLevels,D,error,idx,rep,s,deg):
 	
 	"""
 	Function that estimates the error between the original curve and the
@@ -28,12 +28,8 @@ def error_test(original_curve,t0,t1,Np,numberOfLevels,D,error,idx,rep,s):
 		return
 
 
-	dom,curve,coeff,x,tan,norm = sample_fromClass(t0,t1,original_curve,Np,s)
-	
-	if (sys.argv[2] == 'mls') or (sys.argv[1] == 'mls'):
-		ymin,means,labels,t = mls.reconstructCurve(t0,t1,x,dom,Np,numberOfLevels,D)
-	else:
-		ymin,means,labels,t = imp.reconstructCurve(t0,t1,x,dom,Np,numberOfLevels,D)
+	dom,curve,coeff,x,tan,norm = sample_fromClass(t0,t1,original_curve,Np,s)	
+	ymin,means,labels,t = imp.reconstructCurve(t0,t1,x,dom,Np,numberOfLevels,D)
 	
 
 	"""
@@ -43,22 +39,48 @@ def error_test(original_curve,t0,t1,Np,numberOfLevels,D,error,idx,rep,s):
 	count = 0
 
 	for i in range(numberOfLevels):
-
 		projections = (ymin[:,i] + \
-					np.outer(t[i],(t[i])).dot((x[:,labels == i+1].T\
+						np.outer(t[i],(t[i])).dot((x[:,labels == i+1].T\
 														- ymin[:,i]).T).T).T
 
-		err += np.sum(np.square(np.linalg.norm(projections\
-								- curve[:,labels == i+1], axis = 1)))
+		err += np.sum(np.square(npl.norm(projections\
+									- curve[:,labels == i+1], axis = 1)))
 
 	err = 1.0/(x[0].size)*err
-	
 	error[idx,rep] = [err,Np,s]
 
 
 
 
-def visual_test(original_curve, t0 , t1, Np,numberOfLevels,D):
+
+def mls_error_test(original_curve,t0,t1,Np,numberOfLevels,D,error,idx,rep,s,deg):
+	
+	"""
+	Function that estimates the error between the original curve and the
+	reconstructed curve for the mls algorithm.
+	"""
+		
+	def isNotValidRun():
+		return Np <= numberOfLevels or  D < 0
+
+	if isNotValidRun():
+		return
+
+	
+	dom,curve,coeff,x,tan,norm = sample_fromClass(t0,t1,original_curve,Np,s)
+	poly_val,X,means=mls.reconstructCurve(t0,t1,x,dom,Np,numberOfLevels,D,deg)
+
+	err = 0
+	for i in range(Np):
+		err += npl.norm(poly_val[:,i] - curve[:,i])**2
+
+	error[idx,rep] = [err,Np,s]
+
+		
+
+		
+
+def visual_test(original_curve, t0 , t1, Np,numberOfLevels,D,deg):
 
 	"""
 	Fuction that plots the original curve, the means of each level
@@ -73,23 +95,25 @@ def visual_test(original_curve, t0 , t1, Np,numberOfLevels,D):
 
 	dom,curve,coeff,x,tan,norm = sample_fromClass(t0,t1,original_curve,Np,0.2)
 	
-
-	if (sys.argv[2] == 'mls') or (sys.argv[1] == 'mls'):
-		ymin,means,labels,t = mls.reconstructCurve(t0,t1,x,dom,Np,numberOfLevels,D)
-	else:
-		ymin,means,labels,t = imp.reconstructCurve(t0,t1,x,dom,Np,numberOfLevels,D)
-	
-
 	if D == 2:
 		fig, ax = vis.handle_2D_plot()
 	elif D == 3:
 		fig, ax = vis.handle_3D_plot()
 
+
 	vis.add_scattered_pointcloud_simple(curve,ax,color = 'g',dim= D)
-	vis.add_scattered_pointcloud_simple(ymin,ax,color = 'r', dim = D)
+
+	if function == mls_error_test:
+		p,X,means =mls.reconstructCurve(t0,t1,x,dom,Np,numberOfLevels,D,deg)
+		vis.add_scattered_pointcloud_simple(p,ax,color = 'r', dim = D)
+	else:
+		ymin,means,labels,t = imp.reconstructCurve(t0,t1,x,dom,Np,numberOfLevels,D)
+		vis.add_scattered_pointcloud_simple(ymin,ax,color = 'r', dim = D)	
+
 	vis.add_scattered_pointcloud_simple(means,ax,color = 'b', dim = D)
 
 	plt.show()
+
 
 
 
@@ -121,25 +145,21 @@ def error_plot(error):
 	plt.xscale('log')
 
 	plt.show()
-		
+
+
 
 
 
 if __name__ == '__main__':
 
-	start_time = time.time()
 
-	try:
-		n_jobs = int(sys.argv[1])
-	except:
-		n_jobs = 4
-	
 	# test curves and test values.
 	circle = cc.Circle_Piece_2D(2)
 	helix = cc.Helix_Curve_3D(3)
 
-	levels = [5,10,100,200]
+	levels = [10,100,200]
 	sigma = [0.01,0.1,0.5]
+
 
 
 	# Creating a memory-map in order to store the errror measurments.
@@ -157,26 +177,39 @@ if __name__ == '__main__':
 	error = np.memmap(os.path.join(folder, 'err'),
 				dtype='float64', shape=our_shape.shape,mode='w+')
 	
-	"""
+	
+
+	# Reading user input.
+	n_jobs = 4
+	function = error_test
+
+	for i in range(len(sys.argv)):
+		if type(sys.argv[i]) == int:
+			n_jobs = sys.argv[i]
+
+		if sys.argv[i] == 'mls':
+			function = mls_error_test
+	
+
+
 	# Running the tests.
-	Parallel(n_jobs=n_jobs)(delayed(error_test) 
-			(helix,0,1.4,50*lev,lev,3,error,i*len(sigma)+k,r,s) 
+	Parallel(n_jobs=n_jobs)(delayed(function) 
+			(helix,0,1.4,50*lev,lev,3,error,i*len(sigma)+k,r,s,3) 
 									for i,lev in enumerate(levels)
 											for k,s in enumerate(sigma)
 														for r in range(rep))
 	error_plot(error)
 	
 	
-	Parallel(n_jobs=n_jobs)(delayed(error_test) 
-			(circle,0,1.4,50*lev,lev,2,error,i*len(sigma)+k,r,s) 
+	Parallel(n_jobs=n_jobs)(delayed(function) 
+			(circle,0,1.4,50*lev,lev,2,error,i*len(sigma)+k,r,s,3) 
 									for i,lev in enumerate(levels)
 											for k,s in enumerate(sigma)
 														for r in range(rep))
-	"""
-	print(time.time()-start_time)
+	error_plot(error)
 
-	visual_test(helix,0,1,1000,20,3)
-	visual_test(circle,0,1,1000,20,2)
 
-	#error_plot(error)
+
+	visual_test(helix,0,1,1000,10,3,3)
+	visual_test(circle,0,1,1000,10,2,3)
 

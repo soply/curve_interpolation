@@ -1,12 +1,21 @@
+"""
+Implementation of an algorithm in order to reconstruct a surface from a
+scattered set of points with orthogonal error.
+
+Based on the article "Mesh-Independent Surface Interpolation" by David Levin.
+"""
+
+
 #imports
 import numpy as np
 from sklearn.decomposition import PCA
 from partitioning.based_on_domain import create_partitioning_n
 import numpy.linalg as npl
 
-def reconstructCurve(t0,t1,points,dom,N,numberOfLevels,D):
-	
 
+
+def reconstructCurve(t0,t1,points,dom,N,numberOfLevels,D,deg):
+	
 	"""
 	Parameters
 	==================
@@ -33,10 +42,21 @@ def reconstructCurve(t0,t1,points,dom,N,numberOfLevels,D):
 	Returns
 	==================
 
+	poly_val: np.array of floats, size D x numberOfPoints(N)
+		The evaluation of the estimated polynomial at each point.
+
+	X: np.array of floats, size numberOfPoints(N)
+		The projection of each point onto the tangent of the corresponding 
+		level set.
+
+	means: np.array of floats, size D x numberOfLevels
+		The mean point of each level set.
 
 	"""
 
 
+	
+	
 	"""
 	Step 1: Creating the level sets and calculating the mean of each level set.
 	"""
@@ -51,6 +71,7 @@ def reconstructCurve(t0,t1,points,dom,N,numberOfLevels,D):
 	
 
 
+	
 	"""
 	Step 2: Finding the avarage tangent vector for each level set.
 	"""
@@ -64,32 +85,34 @@ def reconstructCurve(t0,t1,points,dom,N,numberOfLevels,D):
 		
 		tan[:,j] = t
 	
+
 	
+	
+	"""
+	Step 3: Finding a polynomial that estimates the curve for each level set.
+	"""
 
-	solution = np.zeros((D,numberOfLevels))
+	X = np.zeros(N)
+	poly_val = np.zeros((D,N))
 
-	for k in range(numberOfLevels):
+	for k in range(numberOfLevels):		
 		points_in_level = points[:,labels == k+1]
-		
-		x = np.zeros(len(points_in_level[0]))		
+		n = len(points_in_level[0])
+		x = np.zeros(n)
 
-		for j in range(len(points_in_level[0])):
+		for j in range(n):
 			x[j] = np.dot(tan[:,k],points_in_level[:,j])
+			X[k*n + j] = x[j]
 		
-
-		#zero_value = 0
-		zero_value = np.zeros(D)
-		for i in range(D):
-			poly = np.polyfit(x,points_in_level[i,:],D-1)
-			#zero_value += poly[-1]
-			zero_value[i] = poly[-1] 
-		
-		P_ort =  np.outer(tan[:,k],tan[:,k])
-
-		# P(r) = q + p(0)*a
-		solution[:,k] = np.dot(P_ort,means[:,k]) #+ zero_value
+		poly = np.polyfit(x,points_in_level.T,deg)
 	
+		for i in range(D):				
+			poly_val[i][k*n:k*n+n] = np.polyval(poly[:,i],x)
 
-	return solution,means, labels, tan
+
+
+
+	# Returning the solution.
+	return poly_val,X,means
 
 
